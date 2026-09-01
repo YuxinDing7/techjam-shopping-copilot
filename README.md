@@ -115,8 +115,30 @@ flowchart TD
 ```
 
 *Green = session start/end · blue = deterministic processing · amber = decision point · purple = local
-Ollama call · gray = non-LLM fallback path. Implementation specifics (BM25 field weights, RRF fusion, `RERANK_METHOD`, information-gain
-scoring) are in the numbered walkthrough below.*
+Ollama call · gray = non-LLM fallback path.*
+
+### Innovation Highlights
+
+- **Grounded, hallucination-resistant LLM extraction.** Every constraint, search phrase, and category
+  the LLM proposes is re-validated against the raw user message and a fixed vocabulary before
+  acceptance — the model can select, never invent.
+- **Swappable semantic reranker behind one config flag.** `RERANK_METHOD=llm` vs `embedding` are two
+  fully independent rerankers over the same rule-ranked shortlist, so the strategy can be swapped or
+  A/B-tested without touching business logic.
+- **Adaptive, information-theoretic clarification.** The next question is chosen by how much it's
+  expected to shrink the live candidate pool, not a fixed checklist — a genuinely different question
+  order per conversation.
+- **Negation as a hard filter, not a score penalty.** A stated exclusion (e.g. "no leather") removes
+  matching products from the candidate set entirely, so it can never leak into the Top 10.
+- **State-surgical Intent Override handling.** An override resets stale constraints, asked-attributes,
+  and excluded-ASIN history while preserving the transcript and prior no-preferences — an
+  empirically-driven choice: naively keeping `excluded_asins` populated across an override was
+  A/B-tested and collapsed override hit-rate from `1.0` to `0.375` on the public set.
+- **Full per-turn decision trace without touching the scored API.** `debug_snapshot(session_id)` exposes
+  every intermediate decision — accepted/rejected constraints, BM25 expressions, rerank scores — as a
+  side channel the evaluator never scores, for transparent, replayable explanations of each choice.
+
+The numbered walkthrough below gives the exact mechanics behind each pipeline stage in the diagram.
 
 1. **Constraint & intent extraction.** Each turn resolves through the following steps, in order:
    - **Fast path, no LLM call.** If the message is an exact match for the simulator's own "no
@@ -141,9 +163,7 @@ scoring) are in the numbered walkthrough below.*
      `search_phrases` entry must additionally be ≤8 tokens, ≤120 characters, and have every one of its
      tokens appear in the raw user message. A constraint or phrase that fails its check is dropped and
      logged with a reason string (`rejected_constraints` / `rejected_search_phrases`, visible via
-     `debug_snapshot`) rather than silently discarded — nothing is trusted just because the model
-     produced it, only what can be traced back to the user's own words and the fixed vocabularies is
-     kept.
+     `debug_snapshot`) rather than silently discarded.
    - **Override ordering.** When `intent == "override"`, accumulated constraints, asked attributes, and
      excluded-ASIN history are reset *before* the constraint checks above run, so a category-scope check
      for this turn is evaluated against the new (replacement) category rather than the stale one.
@@ -172,10 +192,9 @@ scoring) are in the numbered walkthrough below.*
 6. **Clarification strategy.** `_next_attribute()` first checks two catch-all shortcuts before scoring
    anything: right after an Intent Override, and whenever the route is `buying` and the user has already
    declared at least one `no_preference`, it immediately asks the simulator's catch-all `other` attribute
-   (once, until the next override resets `asked`) rather than running the information-gain search below
-   — both situations mean the most useful next question is "what else matters to you now", not a
-   re-ranked guess from stale candidate data. Otherwise it picks the next `ask_attribute` by estimating
-   information gain — grouping current candidates by coarse attribute value (skipping an attribute if
+   (once, until the next override resets `asked`) rather than running the information-gain search below.
+   Otherwise it picks the next `ask_attribute` by estimating information gain — grouping current
+   candidates by coarse attribute value (`gain = 1 - E[remaining]/N`, skipping an attribute if
    fewer than half the candidates have a known value for it) and preferring the split that most reduces
    expected remaining candidates — with a deterministic fallback priority order when no split is
    informative. `brand` and `category` are never asked, since the evaluator's simulator can never match
@@ -185,62 +204,24 @@ An **Intent Override** turn (detected by regex/LLM-classified `intent="override"
 constraints, asked attributes, and excluded-ASIN history while preserving the conversation transcript
 and previously declared no-preferences, so a replaced preference doesn't get diluted by stale state.
 
-## Innovation Highlights
-
-- **Grounded, hallucination-resistant LLM extraction.** The LLM never gets to inject a constraint,
-  search phrase, or category directly into retrieval — every `constraint.value`, `search_phrase`, and
-  `category_phrase` is re-validated against the raw user message and the fixed attribute/catalog
-  vocabulary (`_apply_llm_extraction`, `_llm_category_terms`) before acceptance. This gives the
-  precision of an LLM parser with the reliability of a rule-based one; nothing is trusted just because
-  the model said so.
-- **Swappable semantic reranker behind one config flag.** `RERANK_METHOD=llm` vs `embedding` are two
-  independent, fully implemented rerankers over the same rule-ranked shortlist — one an LLM relevance
-  judge (0–4 JSON-schema scores), the other embedding cosine similarity — so the retrieval/rerank
-  strategy can be swapped or A/B-tested without touching business logic (`_rerank` dispatch,
-  `_llm_rerank` / `_embedding_rerank`).
-- **Adaptive, information-theoretic clarification.** Instead of a fixed question order, `_next_attribute`
-  scores every still-askable attribute by how much it's expected to shrink the live candidate pool
-  (`gain = 1 - E[remaining]/N` over attribute-value groupings) and asks whichever question is most
-  discriminating *for the current candidates*, not a generic checklist.
-- **Negation as a hard retrieval filter, not just a score penalty.** A stated exclusion (e.g. "no
-  leather") removes matching products from the candidate set entirely (`_violates_negated_constraints`)
-  rather than merely down-ranking them, so an excluded material/color can never leak into the Top 10.
-- **State-surgical Intent Override handling.** An override clears stale constraints, asked-attributes,
-  and excluded-ASIN history — but keeps the full transcript and previously declared no-preferences.
-  Clearing `excluded_asins` was itself an empirically-driven design decision, not a default: keeping it
-  populated across an override was A/B-tested and measured to collapse override hit-rate from `1.0` to
-  `0.375` on the public set, documented in `_update_state`.
-- **Full per-turn decision trace without touching the scored API.** `debug_snapshot(session_id)` exposes
-  every intermediate decision — accepted/rejected constraints, both BM25 expressions and their matches,
-  rule-rerank scores, and the raw LLM/embedding rerank inputs and outputs — as a side channel the
-  evaluator never scores, giving transparent, replayable explanations for *why* each recommendation and
-  question was chosen.
-
 ## Model Choice, Cost, and Network Requirements
 
-- **Model:** [Ollama](https://ollama.com) running `qwen3:4b` locally for constraint extraction and
-  (default) reranking, and `nomic-embed-text` locally when `RERANK_METHOD=embedding`. Both are
-  self-hosted, open-weight models — **no external API key and no per-token cost**.
-- **Network:** requires only a local connection to `http://127.0.0.1:11434` (configurable via
-  `OLLAMA_URL` / `OLLAMA_EMBED_URL`); no outbound internet access is required at inference time.
-- **Offline fallback:** every LLM call path (`_ollama_chat`, `_ollama_embed`) is wrapped so that a
-  timeout, connection error, or malformed response is caught and the agent falls back to the
-  regex/BM25/rule-based path instead of raising — the agent runs and remains scored even with
-  `LLM_ENABLED=0` or no Ollama server present, at reduced ranking quality.
-- **If the official harness disables network access entirely:** set `LLM_ENABLED=0` (and/or
-  `EMBED_ENABLED=0`); the agent then runs purely on the SQLite FTS5/BM25 retrieval and rule-based
-  constraint extraction and rerank described above, with `usage.prompt_tokens` /
-  `usage.completion_tokens` reported as `0`.
-- **Token usage:** reported live per turn via the `usage` field, accumulated from Ollama's own
-  `prompt_eval_count` / `eval_count` response fields (see `Agent._ollama_chat`).
-- **Latency:** each LLM call is bounded by `LLM_TIMEOUT` (default 8s) / `EMBED_TIMEOUT` (default 8s) and
-  runs synchronously within `respond()`. A one-off local measurement (same 10 candidates, same prompt
-  content, `qwen3:4b` / `nomic-embed-text`) found the embedding reranker ~34x faster per rerank call
-  (0.28s vs 9.29s), but only ~1.8x faster end to end over a full multi-turn conversation (14.4s vs 25.5s
-  per sample, averaged over 3 sessions), because constraint extraction still runs the same chat call in
-  both configurations and dominates per-turn latency. See
-  [`evaluation_results/rerank_comparison_summary.md`](evaluation_results/rerank_comparison_summary.md)
-  for the full comparison, including why `RERANK_METHOD=embedding` trades some MRR for that speedup.
+- **Model:** [Ollama](https://ollama.com) running `qwen3:4b` locally (constraint extraction, default
+  rerank) and `nomic-embed-text` locally (only for `RERANK_METHOD=embedding`) — both self-hosted,
+  open-weight, **no API key, no per-token cost**.
+- **Network:** local-only, `http://127.0.0.1:11434` (`OLLAMA_URL` / `OLLAMA_EMBED_URL`); no outbound
+  internet access needed at inference time.
+- **Fallback:** every Ollama call (`_ollama_chat`, `_ollama_embed`) is wrapped so a timeout, connection
+  error, or malformed response falls back to the regex/BM25/rule-based path instead of raising. Set
+  `LLM_ENABLED=0` (and `EMBED_ENABLED=0`) to run fully offline — reduced ranking quality, and
+  `usage.prompt_tokens` / `usage.completion_tokens` report `0`.
+- **Token usage:** reported live per turn via `usage`, accumulated from Ollama's own
+  `prompt_eval_count` / `eval_count`.
+- **Latency:** bounded by `LLM_TIMEOUT` / `EMBED_TIMEOUT` (default 8s each), synchronous within
+  `respond()`. One-off measurement: `RERANK_METHOD=embedding` is ~34x faster per rerank call but only
+  ~1.8x faster end to end (14.4s vs 25.5s/sample) because constraint extraction's chat call dominates
+  either way — full comparison and the MRR trade-off in
+  [`evaluation_results/rerank_comparison_summary.md`](evaluation_results/rerank_comparison_summary.md).
 
 ## Configuration
 
