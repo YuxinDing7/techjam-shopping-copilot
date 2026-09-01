@@ -1,0 +1,59 @@
+{
+  "sample_count": 3,
+  "hit_rate_at_10": 1.0,
+  "mrr": 0.777778,
+  "mttc": 3.666667,
+  "efficiency": 0.733333,
+  "recommended_technical_score": 0.88,
+  "reported_token_usage": {
+    "prompt_tokens": 14209,
+    "completion_tokens": 1800,
+    "total_tokens": 16009
+  },
+  "scenario_metrics": {
+    "browsing": {
+      "sample_count": 1,
+      "hit_rate_at_10": 1.0,
+      "mrr": 1.0,
+      "mttc": 3.0
+    },
+    "buying": {
+      "sample_count": 1,
+      "hit_rate_at_10": 1.0,
+      "mrr": 1.0,
+      "mttc": 4.0
+    },
+    "intent_override": {
+      "sample_count": 1,
+      "hit_rate_at_10": 1.0,
+      "mrr": 0.333333,
+      "mttc": 4.0
+    }
+  },
+  "sessions": [
+    {
+      "sample_id": "public_0106",
+      "scenario_type": "buying",
+      "hit": true,
+      "first_hit_turn": 4,
+      "best_rank": 1,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "sample_id": "public_0173",
+      "scenario_type": "browsing",
+      "hit": true,
+      "first_hit_turn": 3,
+      "best_rank": 1,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "sample_id": "public_0052",
+      "scenario_type": "intent_override",
+      "hit": true,
+      "first_hit_turn": 4,
+      "best_rank": 3,
+      "reciprocal_rank": 0.3333333333333333
+    }
+  ]
+}

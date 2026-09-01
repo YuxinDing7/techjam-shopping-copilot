@@ -1,0 +1,922 @@
+<title>问询台</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    color-scheme: light;
+    --paper: #f9f9f7;
+    --surface: #ffffff;
+    --surface-2: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-soft: #52514e;
+    --muted: #898781;
+    --line: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --accent: #4a3aa7;
+    --accent-ink: #ffffff;
+    --accent-soft: #efebf9;
+    --llm: #2a78d6;
+    --llm-soft: #eaf2fc;
+    --embed: #eb6834;
+    --embed-soft: #fdece3;
+    --good: #0ca30c;
+    --good-soft: #e6f6e2;
+    --critical: #d03b3b;
+    --critical-soft: #fbe9e7;
+    --shadow: 0 1px 2px rgba(11,11,11,0.04), 0 8px 24px -12px rgba(11,11,11,0.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --paper: #0d0d0d;
+      --surface: #17171a;
+      --surface-2: #1a1a19;
+      --ink: #ffffff;
+      --ink-soft: #c3c2b7;
+      --muted: #93918a;
+      --line: #2c2c2a;
+      --border: rgba(255,255,255,0.10);
+      --accent: #9085e9;
+      --accent-ink: #14121f;
+      --accent-soft: rgba(144,133,233,0.16);
+      --llm: #3987e5;
+      --llm-soft: rgba(57,135,229,0.16);
+      --embed: #d95926;
+      --embed-soft: rgba(217,89,38,0.18);
+      --good: #1abf1a;
+      --good-soft: rgba(26,191,26,0.14);
+      --critical: #e66767;
+      --critical-soft: rgba(230,103,103,0.16);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --paper: #0d0d0d;
+    --surface: #17171a;
+    --surface-2: #1a1a19;
+    --ink: #ffffff;
+    --ink-soft: #c3c2b7;
+    --muted: #93918a;
+    --line: #2c2c2a;
+    --border: rgba(255,255,255,0.10);
+    --accent: #9085e9;
+    --accent-ink: #14121f;
+    --accent-soft: rgba(144,133,233,0.16);
+    --llm: #3987e5;
+    --llm-soft: rgba(57,135,229,0.16);
+    --embed: #d95926;
+    --embed-soft: rgba(217,89,38,0.18);
+    --good: #1abf1a;
+    --good-soft: rgba(26,191,26,0.14);
+    --critical: #e66767;
+    --critical-soft: rgba(230,103,103,0.16);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  *{ box-sizing: border-box; }
+  body{
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45;
+  }
+  .num{ font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  h1,h2,h3{ font-family: "Archivo", system-ui, sans-serif; text-wrap: balance; margin: 0; }
+
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 0 20px 64px; }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner{
+    max-width: 1180px; margin: 0 auto; padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .brand{ display: flex; align-items: baseline; gap: 10px; }
+  .brand-mark{
+    font-family: "Archivo"; font-weight: 800; font-size: 19px; letter-spacing: -0.01em;
+  }
+  .brand-tag{ color: var(--muted); font-size: 12.5px; }
+
+  .controls{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .mode-switch{
+    display: inline-flex; padding: 3px; gap: 2px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .mode-btn{
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    padding: 7px 14px; border-radius: 7px; font: inherit; font-size: 13px; font-weight: 600;
+    color: var(--ink-soft); display: flex; align-items: center; gap: 7px;
+    transition: background .15s ease, color .15s ease;
+  }
+  .mode-btn .dot{ width: 8px; height: 8px; border-radius: 50%; }
+  .mode-btn[data-mode="llm"] .dot{ background: var(--llm); }
+  .mode-btn[data-mode="embedding"] .dot{ background: var(--embed); }
+  .mode-btn.is-active[data-mode="llm"]{ background: var(--llm-soft); color: var(--llm); }
+  .mode-btn.is-active[data-mode="embedding"]{ background: var(--embed-soft); color: var(--embed); }
+
+  .lang-switch{
+    display: inline-flex; padding: 3px; gap: 2px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .lang-btn{
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    padding: 7px 12px; border-radius: 7px; font: inherit; font-size: 12.5px; font-weight: 600;
+    color: var(--ink-soft); transition: background .15s ease, color .15s ease;
+  }
+  .lang-btn.is-active{ background: var(--accent-soft); color: var(--accent); }
+
+  /* ---------- section headings ---------- */
+  .section-head{ padding: 40px 0 18px; display:flex; align-items:flex-end; justify-content:space-between; gap: 16px; flex-wrap: wrap; }
+  .section-eyebrow{ color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; margin: 0 0 6px; }
+  .section-head h2{ font-size: 22px; font-weight: 700; }
+  .section-note{ color: var(--ink-soft); font-size: 13px; max-width: 46ch; }
+
+  /* ---------- scoreboard ---------- */
+  .tiles{ display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .tile{
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .tile.is-hero{ background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+  .tile-label{ font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .tile-value{ font-size: 26px; font-weight: 600; margin-top: 6px; }
+  .tile.is-hero .tile-value{ color: var(--accent); }
+  .tile-delta{ font-size: 12px; margin-top: 4px; color: var(--muted); }
+  .tile-delta b{ font-weight: 600; }
+  .tile-delta.is-up b{ color: var(--good); }
+  .tile-delta.is-down b{ color: var(--critical); }
+
+  .callout{
+    margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-soft);
+  }
+  .callout b{ color: var(--ink); font-weight: 600; }
+
+  .charts{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .chart-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .chart-title{ font-size: 13px; font-weight: 600; margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;}
+  .legend{ display:flex; gap: 12px; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .legend i{ width:8px; height:8px; border-radius:2px; display:inline-block; }
+  .legend .li-llm i{ background: var(--llm); }
+  .legend .li-embed i{ background: var(--embed); }
+
+  .bar-row{ display:grid; grid-template-columns: 84px 1fr; align-items:center; gap: 10px; margin-bottom: 10px; }
+  .bar-row:last-child{ margin-bottom: 0; }
+  .bar-label{ font-size: 12px; color: var(--ink-soft); }
+  .bar-pair{ display:flex; flex-direction:column; gap: 3px; }
+  .bar-track{ position:relative; height: 9px; background: var(--surface-2); border-radius: 5px; overflow:hidden; }
+  .bar-fill{ position:absolute; inset:0 auto 0 0; border-radius: 5px; transition: width .3s ease, opacity .2s ease; }
+  .bar-fill.llm{ background: var(--llm); }
+  .bar-fill.embed{ background: var(--embed); }
+  .bar-fill.is-dim{ opacity: .35; }
+  .bar-val{ font-size: 10.5px; color: var(--muted); width: 40px; text-align:right; }
+  .bar-track-wrap{ display:flex; align-items:center; gap:8px; }
+
+  /* ---------- demo section ---------- */
+  .demo-grid{ display: grid; grid-template-columns: 272px 1fr; gap: 18px; align-items: start; }
+
+  .rail{ display:flex; flex-direction:column; gap: 14px; position: sticky; top: 76px; }
+  .rail-block{ background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
+  .rail-title{ font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+
+  .chip-grid{ display:flex; flex-wrap:wrap; gap: 6px; }
+  .chip{
+    appearance:none; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+    border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+    transition: all .15s ease; text-align:left;
+  }
+  .chip:hover{ border-color: var(--accent); color: var(--ink); }
+  .chip.is-active{ background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .chip .n{ color: var(--muted); font-size: 11px; }
+  .chip.is-active .n{ color: var(--accent); opacity: .75; }
+
+  .sample-list{ display:flex; flex-direction:column; gap: 8px; }
+  .sample-card{
+    appearance:none; text-align:left; cursor:pointer; width: 100%;
+    border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 10px 11px;
+    display:flex; flex-direction:column; gap: 4px; transition: all .15s ease;
+  }
+  .sample-card:hover{ border-color: var(--accent); }
+  .sample-card.is-active{ border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .sample-card-top{ display:flex; justify-content: space-between; align-items:center; gap:8px; }
+  .sample-id{ font-family: "IBM Plex Mono"; font-size: 11px; color: var(--muted); }
+  .diff-badge{ font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 5px; text-transform: uppercase; letter-spacing: .03em; }
+  .diff-easy{ background: var(--good-soft); color: var(--good); }
+  .diff-medium{ background: var(--embed-soft); color: var(--embed); }
+  .diff-hard{ background: var(--critical-soft); color: var(--critical); }
+  .sample-preview{ font-size: 12px; color: var(--ink-soft); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  .profile-tags{ display:flex; flex-wrap:wrap; gap: 5px; }
+  .ptag{ font-size: 11px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-soft); padding: 3px 8px; border-radius: 999px; }
+  .profile-line{ font-size: 12px; color: var(--ink-soft); margin-top: 8px; }
+  .profile-line + .profile-line{ margin-top: 4px; }
+  .profile-line b{ color: var(--ink); font-weight: 600; }
+
+  /* main panel */
+  .panel{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .panel-head{ padding: 14px 18px; border-bottom: 1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap: 12px; flex-wrap:wrap; }
+  .panel-head-left{ display:flex; align-items:center; gap: 10px; flex-wrap:wrap; }
+  .scenario-tag{ font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing:.04em; padding: 4px 9px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+  .sample-id-lg{ font-family:"IBM Plex Mono"; font-size: 12.5px; color: var(--muted); }
+
+  .compare-strip{ display:flex; gap: 8px; }
+  .compare-pill{ display:flex; align-items:center; gap:6px; font-size: 11.5px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft); }
+  .compare-pill .dot{ width:7px; height:7px; border-radius:50%; }
+  .compare-pill[data-mode="llm"] .dot{ background: var(--llm); }
+  .compare-pill[data-mode="embedding"] .dot{ background: var(--embed); }
+  .compare-pill b{ color: var(--ink); font-weight: 600; }
+  .compare-pill.is-current{ border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+  .target-card{ margin: 14px 18px 0; padding: 11px 13px; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface-2); display:flex; align-items:center; gap: 12px; }
+  .target-card .icon{ font-size: 18px; }
+  .target-card .info{ flex:1; min-width:0; }
+  .target-card .k{ font-size: 10.5px; text-transform:uppercase; letter-spacing:.05em; color: var(--muted); font-weight:600; }
+  .target-card .title{ font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .target-card .title.is-hidden{ filter: blur(6px); user-select:none; }
+  .reveal-btn{ appearance:none; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 7px; padding: 6px 10px; font: inherit; font-size: 11.5px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .reveal-btn:hover{ border-color: var(--accent); color: var(--accent); }
+  .target-card.is-found{ border-style: solid; border-color: var(--good); background: var(--good-soft); }
+  .target-card.is-found .icon{ }
+
+  .stepper{ display:flex; align-items:center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .step-btn{ appearance:none; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 8px; padding: 7px 12px; font: inherit; font-size: 12.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
+  .step-btn:hover:not(:disabled){ border-color: var(--accent); color: var(--accent); }
+  .step-btn:disabled{ opacity: .4; cursor: not-allowed; }
+  .step-btn.is-playing{ background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .turn-count{ font-size: 12.5px; color: var(--ink-soft); margin-left: 2px; }
+  .turn-count b{ font-family: "IBM Plex Mono"; color: var(--ink); }
+  .step-spacer{ flex: 1; }
+  .reset-link{ appearance:none; border:0; background:transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .reset-link:hover{ color: var(--ink); }
+
+  .transcript{ padding: 16px 18px 20px; display:flex; flex-direction:column; gap: 16px; }
+  .turn-block{ animation: rise .28s ease both; }
+  @media (prefers-reduced-motion: reduce){ .turn-block{ animation: none; } }
+  @keyframes rise{ from{ opacity:0; transform: translateY(6px); } to{ opacity:1; transform:none; } }
+
+  .turn-index{ font-size: 10.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing:.06em; margin-bottom: 8px; display:flex; align-items:center; gap:8px; }
+  .turn-index::after{ content:""; flex:1; height:1px; background: var(--line); }
+
+  .bubble-row{ display:flex; margin-bottom: 8px; }
+  .bubble-row.user{ justify-content: flex-end; }
+  .bubble{ max-width: 78%; padding: 9px 13px; border-radius: 13px; font-size: 13.5px; line-height:1.5; }
+  .bubble.user{ background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+  .bubble.agent{ background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .speaker{ font-size: 10.5px; color: var(--muted); font-weight:600; margin: 0 2px 4px; }
+  .bubble-row.user + .speaker, .speaker.for-user{ text-align:right; }
+
+  .ask-chip{ display:inline-flex; align-items:center; gap:5px; margin-top: 8px; font-size: 11px; font-weight:600; padding: 3px 9px; border-radius: 999px; background: var(--embed-soft); color: var(--embed); }
+
+  .hit-banner{ display:flex; align-items:center; gap: 8px; margin-top: 10px; padding: 8px 12px; border-radius: 9px; background: var(--good-soft); color: var(--good); font-size: 12.5px; font-weight: 600; }
+
+  .rank-list{ margin-top: 10px; display:flex; flex-direction:column; gap: 6px; }
+  .rank-item{ display:flex; align-items:center; gap: 10px; padding: 7px 9px; border-radius: 9px; background: var(--surface-2); border: 1px solid transparent; }
+  .rank-item.is-target{ border-color: var(--good); background: var(--good-soft); }
+  .rank-badge{ font-family:"IBM Plex Mono"; font-size: 11px; font-weight:600; color: var(--muted); width: 20px; text-align:center; flex-shrink:0; }
+  .rank-item.is-target .rank-badge{ color: var(--good); }
+  .rank-info{ min-width:0; flex:1; }
+  .rank-title{ font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rank-meta{ font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+  .rank-gap{ font-size: 10.5px; color: var(--muted); text-align:center; padding: 2px 0; }
+
+  .detail-toggle{ appearance:none; border:0; background:transparent; color: var(--muted); font: inherit; font-size: 11.5px; cursor:pointer; margin-top: 10px; display:flex; align-items:center; gap:5px; padding:0; }
+  .detail-toggle:hover{ color: var(--ink); }
+  .detail-body{ margin-top: 8px; padding: 10px 12px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); font-size: 11.5px; color: var(--ink-soft); display:none; }
+  .detail-body.is-open{ display:block; }
+  .detail-row{ display:flex; gap: 8px; margin-bottom: 4px; }
+  .detail-row:last-child{ margin-bottom:0; }
+  .detail-row .k{ color: var(--muted); flex-shrink:0; width: 68px; }
+  .detail-row .v{ font-family:"IBM Plex Mono"; font-size: 11px; }
+
+  footer{ margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+
+  @media (max-width: 900px){
+    .demo-grid{ grid-template-columns: 1fr; }
+    .rail{ position: static; flex-direction: row; flex-wrap: wrap; }
+    .rail-block{ flex: 1; min-width: 220px; }
+    .tiles{ grid-template-columns: repeat(2, 1fr); }
+    .charts{ grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px){
+    .tiles{ grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark" data-i18n="brandMark">🧾 问询台</span>
+      <span class="brand-tag" data-i18n="brandTag">对话式导购 Rerank 复盘</span>
+    </div>
+    <div class="controls">
+      <div class="mode-switch" id="modeSwitch">
+        <button class="mode-btn" data-mode="llm"><span class="dot"></span>LLM Rerank</button>
+        <button class="mode-btn" data-mode="embedding"><span class="dot"></span>Embedding Rerank</button>
+      </div>
+      <div class="lang-switch" id="langSwitch">
+        <button class="lang-btn" data-lang="zh">中文</button>
+        <button class="lang-btn" data-lang="en">EN</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section id="scoreboard">
+    <div class="section-head">
+      <div>
+        <p class="section-eyebrow">Public Set · 200 Sessions</p>
+        <h2 data-i18n="scoreboardTitle">排行榜</h2>
+      </div>
+      <p class="section-note" data-i18n="scoreboardNote">当前指标对应上方选中的重排策略；切换开关可对比两种策略的公开集表现。</p>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+    <div class="callout" id="callout"></div>
+
+    <div class="charts">
+      <div class="chart-card">
+        <div class="chart-title">
+          <span data-i18n="chartHitTitle">Hit Rate@10 · 按场景</span>
+          <span class="legend"><span class="li-llm"><i></i>LLM</span><span class="li-embed"><i></i>Embedding</span></span>
+        </div>
+        <div id="chartHit"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">
+          <span data-i18n="chartMrrTitle">MRR · 按场景</span>
+          <span class="legend"><span class="li-llm"><i></i>LLM</span><span class="li-embed"><i></i>Embedding</span></span>
+        </div>
+        <div id="chartMrr"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="section-head">
+      <div>
+        <p class="section-eyebrow">Live Walkthrough</p>
+        <h2 data-i18n="demoTitle">现场复盘</h2>
+      </div>
+      <p class="section-note" data-i18n="demoNote">选一个场景、一条样本，逐轮回放真实对话与候选排序，对照两种 rerank 策略的命中轮次与排名。</p>
+    </div>
+
+    <div class="demo-grid">
+      <div class="rail">
+        <div class="rail-block">
+          <div class="rail-title" data-i18n="scenarioRail">场景</div>
+          <div class="chip-grid" id="scenarioChips"></div>
+        </div>
+        <div class="rail-block">
+          <div class="rail-title" data-i18n="sampleRail">测试样本</div>
+          <div class="sample-list" id="sampleList"></div>
+        </div>
+        <div class="rail-block" id="profileBlock">
+          <div class="rail-title" data-i18n="profileRail">顾客画像</div>
+          <div id="profileBody"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-head-left">
+            <span class="scenario-tag" id="panelScenario">—</span>
+            <span class="sample-id-lg" id="panelSampleId">—</span>
+          </div>
+          <div class="compare-strip" id="compareStrip"></div>
+        </div>
+
+        <div class="target-card" id="targetCard">
+          <span class="icon">🎯</span>
+          <div class="info">
+            <div class="k" data-i18n="targetLabel">目标商品</div>
+            <div class="title is-hidden" id="targetTitle">—</div>
+          </div>
+          <button class="reveal-btn" id="revealBtn" data-i18n="revealBtn">揭晓目标</button>
+        </div>
+
+        <div class="stepper">
+          <button class="step-btn" id="btnReset" data-i18n="resetBtn" data-i18n-title="resetTitle" title="回到第一轮">⏮ 重置</button>
+          <button class="step-btn" id="btnPrev" data-i18n="prevBtn">◀ 上一轮</button>
+          <button class="step-btn" id="btnNext" data-i18n="nextBtn">下一轮 ▶</button>
+          <span class="turn-count" id="turnCount"></span>
+          <div class="step-spacer"></div>
+          <button class="step-btn" id="btnPlay">▶ 自动播放</button>
+        </div>
+
+        <div class="transcript" id="transcript"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer data-i18n="footer">
+    数据来自 evaluator/local_evaluator 在 200 条公开样本上的完整回放（result_full.json / result_embedding.json）；场景演示为其中 12 条真实会话的精选回放。
+  </footer>
+</div>
+
+<script id="demo-data" type="application/json">__DEMO_DATA_JSON__</script>
+<script>
+(function(){
+  "use strict";
+  var DATA = JSON.parse(document.getElementById('demo-data').textContent);
+  var CATALOG = DATA.catalog;
+  var AGG = DATA.aggregate;
+
+  var SCENARIO_ORDER = ["buying","browsing","intent_override","boundary"];
+
+  var I18N = {
+    zh: {
+      pageTitle: "问询台",
+      brandMark: "🧾 问询台",
+      brandTag: "对话式导购 Rerank 复盘",
+      scoreboardTitle: "排行榜",
+      scoreboardNote: "当前指标对应上方选中的重排策略；切换开关可对比两种策略的公开集表现。",
+      chartHitTitle: "Hit Rate@10 · 按场景",
+      chartMrrTitle: "MRR · 按场景",
+      demoTitle: "现场复盘",
+      demoNote: "选一个场景、一条样本，逐轮回放真实对话与候选排序，对照两种 rerank 策略的命中轮次与排名。",
+      scenarioRail: "场景",
+      sampleRail: "测试样本",
+      profileRail: "顾客画像",
+      targetLabel: "目标商品",
+      revealBtn: "揭晓目标",
+      resetTitle: "回到第一轮",
+      resetBtn: "⏮ 重置",
+      prevBtn: "◀ 上一轮",
+      nextBtn: "下一轮 ▶",
+      playBtn: "▶ 自动播放",
+      pauseBtn: "⏸ 暂停",
+      footer: "数据来自 evaluator/local_evaluator 在 200 条公开样本上的完整回放（result_full.json / result_embedding.json）；场景演示为其中 12 条真实会话的精选回放。",
+
+      scenarioLabel: { buying:"明确购买", browsing:"自由浏览", intent_override:"需求变更", boundary:"边界测试" },
+      diffLabel: { easy:"简单", medium:"中等", hard:"困难" },
+      attrLabel: { category:"类别", material:"材质", color:"颜色", size:"尺寸", style:"风格", brand:"品牌", budget:"预算", feature:"功能", use_case:"使用场景", other:"其他" },
+      routeLabel: { buying:"精确购买模式", browsing:"自由浏览模式" },
+
+      tileTechnicalScore: "Technical Score",
+      tileHitRate: "Hit Rate@10",
+      tileMrr: "MRR",
+      tileMttc: "MTTC（平均命中轮次）",
+      tileTokenPerSession: "Token / 会话",
+      tileLatency: "单次重排延迟（10 候选）",
+      deltaPrefix: function(name){ return "对比 " + name + "："; },
+      tokenNote: "调用类型不同，口径不可直接比价",
+      latencyNote: "相差约 34x（重排单步，同批候选）",
+      calloutHtml: function(ceL, ceE, rrLp, rrLc, rrE, diff){
+        return '<b>Token 数不能直接对比：</b> 两种策略的“约束抽取”阶段调用同一个对话模型，token 消耗基本持平（LLM ' + ceL + ' vs Embedding ' + ceE + '）。差异集中在重排阶段：LLM Rerank 用一次对话补全为候选打分，产生 ' + rrLp + ' prompt + ' + rrLc + ' completion token；Embedding Rerank 只做向量编码，产生 ' + rrE + ' prompt token、<b>0</b> completion token。两边是不同类型的模型调用（对话生成 vs 向量编码），token 单价和算力都不等价，因此 token 总量只能看各自趋势，不能相加换算成本高低；Technical Score 上 LLM Rerank 领先 Embedding Rerank ' + diff + '。' +
+          '<br><br><b>延迟差距会被摊薄：</b> 单次重排调用本身 Embedding 比 LLM 快约 34x（0.28s vs 9.29s，10 候选同批打分），但端到端完整对话（3 样本实测）只快约 1.8x（43.2s vs 76.5s）——因为两个版本的约束抽取阶段仍调用同一个 qwen3:4b 对话模型，且往往是每轮耗时的大头，重排本身也常因“检索意图未变”被跳过。';
+      },
+
+      profilePurchase: "历史购买：",
+      profileRating: "评价风格：",
+      compareHit: function(turn, rank){ return "第" + turn + "轮 · Rank " + rank; },
+      compareMiss: "未命中",
+      askPrefix: "追问 · ",
+      hitBanner: function(turn, rank){ return "✓ 命中目标商品（第 " + turn + " 轮，Rank " + rank + "）"; },
+      noConstraints: "（无）",
+      techDetail: "技术细节",
+      detailRoute: "路由",
+      detailConstraints: "已知约束",
+      turnIndexLabel: function(n){ return "第 " + n + " 轮"; },
+      turnCount: function(now, total){ return "第 <b>" + now + "</b> / <b>" + total + "</b> 轮"; },
+    },
+    en: {
+      pageTitle: "Concierge Desk",
+      brandMark: "🧾 Concierge Desk",
+      brandTag: "Conversational Shopping · Rerank Review",
+      scoreboardTitle: "Leaderboard",
+      scoreboardNote: "Metrics below reflect the rerank strategy selected above; toggle it to compare both strategies on the public set.",
+      chartHitTitle: "Hit Rate@10 · by Scenario",
+      chartMrrTitle: "MRR · by Scenario",
+      demoTitle: "Live Replay",
+      demoNote: "Pick a scenario and a sample, then replay the real conversation and candidate ranking turn by turn — compare hit turn and rank across both rerank strategies.",
+      scenarioRail: "Scenario",
+      sampleRail: "Test Samples",
+      profileRail: "Customer Profile",
+      targetLabel: "Target Product",
+      revealBtn: "Reveal Target",
+      resetTitle: "Back to turn 1",
+      resetBtn: "⏮ Reset",
+      prevBtn: "◀ Prev Turn",
+      nextBtn: "Next Turn ▶",
+      playBtn: "▶ Auto-Play",
+      pauseBtn: "⏸ Pause",
+      footer: "Data is the full replay of evaluator/local_evaluator over the 200 public sessions (result_full.json / result_embedding.json); the live walkthrough curates 12 of those real sessions.",
+
+      scenarioLabel: { buying:"Buying", browsing:"Browsing", intent_override:"Intent Override", boundary:"Boundary" },
+      diffLabel: { easy:"Easy", medium:"Medium", hard:"Hard" },
+      attrLabel: { category:"Category", material:"Material", color:"Color", size:"Size", style:"Style", brand:"Brand", budget:"Budget", feature:"Feature", use_case:"Use Case", other:"Other" },
+      routeLabel: { buying:"Buying route", browsing:"Browsing route" },
+
+      tileTechnicalScore: "Technical Score",
+      tileHitRate: "Hit Rate@10",
+      tileMrr: "MRR",
+      tileMttc: "MTTC (avg. turns to hit)",
+      tileTokenPerSession: "Tokens / Session",
+      tileLatency: "Single Rerank Latency (10 candidates)",
+      deltaPrefix: function(name){ return "vs " + name + ": "; },
+      tokenNote: "Different call types — not directly cost-comparable",
+      latencyNote: "~34x difference (single rerank step, same candidate batch)",
+      calloutHtml: function(ceL, ceE, rrLp, rrLc, rrE, diff){
+        return "<b>Token counts aren't directly comparable:</b> both strategies call the same chat model for the “constraint extraction” step, so that spend is roughly even (LLM " + ceL + " vs Embedding " + ceE + "). The difference concentrates in the rerank step: LLM Rerank uses one chat completion to score candidates, producing " + rrLp + " prompt + " + rrLc + " completion tokens; Embedding Rerank only does vector encoding, producing " + rrE + " prompt tokens and <b>0</b> completion tokens. These are different call types (chat generation vs. vector encoding) with different per-token cost and compute, so the totals only show relative trend, not an addable cost figure; on Technical Score, LLM Rerank leads Embedding Rerank by " + diff + "." +
+          "<br><br><b>The latency gap narrows end-to-end:</b> a single rerank call is ~34x faster with Embedding than LLM (0.28s vs 9.29s, 10 candidates scored in one batch), but a full end-to-end conversation (3 sessions, measured) is only ~1.8x faster (43.2s vs 76.5s) — both versions still call the same qwen3:4b chat model for constraint extraction, which usually dominates per-turn latency, and the rerank step itself is often skipped when the retrieval intent hasn't changed.";
+      },
+
+      profilePurchase: "Purchase history: ",
+      profileRating: "Rating style: ",
+      compareHit: function(turn, rank){ return "Turn " + turn + " · Rank " + rank; },
+      compareMiss: "Miss",
+      askPrefix: "Asking · ",
+      hitBanner: function(turn, rank){ return "✓ Hit target product (turn " + turn + ", rank " + rank + ")"; },
+      noConstraints: "(none)",
+      techDetail: "Technical Details",
+      detailRoute: "Route",
+      detailConstraints: "Known Constraints",
+      turnIndexLabel: function(n){ return "Turn " + n; },
+      turnCount: function(now, total){ return "Turn <b>" + now + "</b> / <b>" + total + "</b>"; },
+    },
+  };
+
+  function T(key){
+    var entry = I18N[state.lang][key];
+    if (typeof entry === 'function') return entry.apply(null, Array.prototype.slice.call(arguments, 1));
+    return entry;
+  }
+
+  var SCENARIO_LABEL, DIFF_LABEL, ATTR_LABEL, ROUTE_LABEL;
+  function syncLangDicts(){
+    var L = I18N[state.lang];
+    SCENARIO_LABEL = L.scenarioLabel;
+    DIFF_LABEL = L.diffLabel;
+    ATTR_LABEL = L.attrLabel;
+    ROUTE_LABEL = L.routeLabel;
+  }
+
+  function applyStaticI18N(){
+    document.title = T('pageTitle');
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      el.textContent = T(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(function(el){
+      el.title = T(el.getAttribute('data-i18n-title'));
+    });
+    document.querySelectorAll('.lang-btn').forEach(function(b){
+      b.classList.toggle('is-active', b.getAttribute('data-lang') === state.lang);
+    });
+  }
+
+  var state = {
+    lang: (function(){ try { return localStorage.getItem('demoLang') || 'zh'; } catch(e){ return 'zh'; } })(),
+    mode: "llm",
+    scenario: "buying",
+    sampleId: DATA.scenarios.buying[0].sample_id,
+    turnIndex: 1,
+    playing: false,
+    revealed: false,
+    playTimer: null,
+  };
+
+  function fmtPct(x){ return (x*100).toFixed(1) + "%"; }
+  function fmtNum(x, d){ return Number(x).toFixed(d==null?3:d); }
+  function currentSample(){
+    var list = DATA.scenarios[state.scenario];
+    for (var i=0;i<list.length;i++) if (list[i].sample_id === state.sampleId) return list[i];
+    return list[0];
+  }
+  function otherMode(m){ return m === "llm" ? "embedding" : "llm"; }
+
+  // ---------- scoreboard ----------
+  function renderTiles(){
+    var mode = state.mode, other = otherMode(mode);
+    var a = AGG[mode], b = AGG[other];
+    var tokensPerSession = Math.round(a.reported_token_usage.total_tokens / a.sample_count);
+    var tokensOtherPerSession = Math.round(b.reported_token_usage.total_tokens / b.sample_count);
+    var otherLabel = other === "llm" ? "LLM" : "Embedding";
+
+    function delta(curr, oth, higherIsBetter, fmt){
+      var d = curr - oth;
+      var cls = Math.abs(d) < 1e-9 ? "" : (d > 0 === higherIsBetter ? "is-up" : "is-down");
+      var arrow = d > 0 ? "↑" : (d < 0 ? "↓" : "→");
+      return '<div class="tile-delta ' + cls + '">' + T('deltaPrefix', otherLabel) + '<b>' + fmt(oth) + ' ' + arrow + '</b></div>';
+    }
+
+    var tiles = [
+      { hero:true, label:T('tileTechnicalScore'), value: fmtNum(a.recommended_technical_score, 3),
+        delta: delta(a.recommended_technical_score, b.recommended_technical_score, true, function(v){return fmtNum(v,3);}) },
+      { label:T('tileHitRate'), value: fmtPct(a.hit_rate_at_10),
+        delta: delta(a.hit_rate_at_10, b.hit_rate_at_10, true, fmtPct) },
+      { label:T('tileMrr'), value: fmtNum(a.mrr, 3),
+        delta: delta(a.mrr, b.mrr, true, function(v){return fmtNum(v,3);}) },
+      { label:T('tileMttc'), value: fmtNum(a.mttc, 2),
+        delta: delta(a.mttc, b.mttc, false, function(v){return fmtNum(v,2);}) },
+      { label:T('tileTokenPerSession'), value: tokensPerSession.toLocaleString(),
+        delta: '<div class="tile-delta">' + T('deltaPrefix', otherLabel) + '<b>' + tokensOtherPerSession.toLocaleString() + '</b></div><div class="tile-delta">' + T('tokenNote') + '</div>' },
+      { label:T('tileLatency'), value: (mode==="llm"?"9.29":"0.28") + " s",
+        delta: delta(mode==="llm"?9.29:0.28, mode==="llm"?0.28:9.29, false, function(v){return fmtNum(v,2)+" s";}) +
+          '<div class="tile-delta">' + T('latencyNote') + '</div>' },
+    ];
+
+    document.getElementById('tiles').innerHTML = tiles.map(function(t){
+      return '<div class="tile' + (t.hero?' is-hero':'') + '">' +
+        '<div class="tile-label">' + t.label + '</div>' +
+        '<div class="tile-value num">' + t.value + '</div>' +
+        t.delta +
+      '</div>';
+    }).join('');
+
+    var scoreDiff = AGG.llm.recommended_technical_score - AGG.embedding.recommended_technical_score;
+    var ceL = AGG.llm.token_breakdown.constraint_extraction, ceE = AGG.embedding.token_breakdown.constraint_extraction;
+    var rrL = AGG.llm.token_breakdown.rerank_step, rrE = AGG.embedding.token_breakdown.rerank_step;
+    document.getElementById('callout').innerHTML = T('calloutHtml',
+      (ceL.prompt_tokens+ceL.completion_tokens).toLocaleString(),
+      (ceE.prompt_tokens+ceE.completion_tokens).toLocaleString(),
+      rrL.prompt_tokens.toLocaleString(),
+      rrL.completion_tokens.toLocaleString(),
+      rrE.prompt_tokens.toLocaleString(),
+      fmtNum(Math.abs(scoreDiff),3)
+    );
+  }
+
+  function renderCharts(){
+    function build(metricKey, fmt){
+      return SCENARIO_ORDER.map(function(s){
+        var llmV = AGG.llm.scenario_metrics[s][metricKey];
+        var embV = AGG.embedding.scenario_metrics[s][metricKey];
+        var max = Math.max(llmV, embV, 0.0001);
+        var llmDim = state.mode === "embedding" ? " is-dim" : "";
+        var embDim = state.mode === "llm" ? " is-dim" : "";
+        return '<div class="bar-row">' +
+          '<div class="bar-label">' + SCENARIO_LABEL[s] + '</div>' +
+          '<div class="bar-pair">' +
+            '<div class="bar-track-wrap"><div class="bar-track"><div class="bar-fill llm' + llmDim + '" style="width:' + (llmV/max*100) + '%"></div></div><span class="bar-val num">' + fmt(llmV) + '</span></div>' +
+            '<div class="bar-track-wrap"><div class="bar-track"><div class="bar-fill embed' + embDim + '" style="width:' + (embV/max*100) + '%"></div></div><span class="bar-val num">' + fmt(embV) + '</span></div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+    document.getElementById('chartHit').innerHTML = build('hit_rate_at_10', fmtPct);
+    document.getElementById('chartMrr').innerHTML = build('mrr', function(v){ return fmtNum(v,2); });
+  }
+
+  // ---------- rail ----------
+  function renderScenarioChips(){
+    document.getElementById('scenarioChips').innerHTML = SCENARIO_ORDER.map(function(s){
+      var n = DATA.scenarios[s].length;
+      var active = s === state.scenario ? ' is-active' : '';
+      return '<button class="chip' + active + '" data-scenario="' + s + '">' + SCENARIO_LABEL[s] + ' <span class="n">' + n + '</span></button>';
+    }).join('');
+  }
+
+  function renderSampleList(){
+    var list = DATA.scenarios[state.scenario];
+    document.getElementById('sampleList').innerHTML = list.map(function(entry){
+      var active = entry.sample_id === state.sampleId ? ' is-active' : '';
+      var firstTurn = entry.variants.llm.turns[0] || entry.variants.embedding.turns[0];
+      var preview = firstTurn ? firstTurn.user_message : '';
+      return '<button class="sample-card' + active + '" data-sample="' + entry.sample_id + '">' +
+        '<div class="sample-card-top"><span class="sample-id">' + entry.sample_id.replace('public_','#') + '</span>' +
+        '<span class="diff-badge diff-' + entry.difficulty + '">' + (DIFF_LABEL[entry.difficulty]||entry.difficulty) + '</span></div>' +
+        '<div class="sample-preview">' + escapeHtml(preview) + '</div>' +
+      '</button>';
+    }).join('');
+  }
+
+  function renderProfile(){
+    var s = currentSample();
+    var p = s.user_profile;
+    var tags = (p.preference_tags||[]).map(function(t){ return '<span class="ptag">' + escapeHtml(t) + '</span>'; }).join('');
+    document.getElementById('profileBody').innerHTML =
+      '<div class="profile-tags">' + tags + '</div>' +
+      '<div class="profile-line"><b>' + T('profilePurchase') + '</b>' + escapeHtml(p.purchase_frequency||'—') + '</div>' +
+      '<div class="profile-line"><b>' + T('profileRating') + '</b>' + escapeHtml(p.rating_style||'—') + '</div>';
+  }
+
+  // ---------- main panel ----------
+  function escapeHtml(str){
+    return String(str==null?'':str).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function productTitle(asin){
+    var p = CATALOG[asin];
+    return p ? p.title : asin;
+  }
+  function productMeta(asin){
+    var p = CATALOG[asin];
+    if (!p) return '';
+    var bits = [];
+    if (p.rating) bits.push('★ ' + p.rating + (p.rating_count ? ' (' + p.rating_count + ')' : ''));
+    if (p.price) bits.push('$' + p.price);
+    if (p.categories && p.categories.length) bits.push(p.categories[p.categories.length-1]);
+    return bits.join(' · ');
+  }
+
+  function renderCompareStrip(){
+    var s = currentSample();
+    document.getElementById('compareStrip').innerHTML = ['llm','embedding'].map(function(m){
+      var meta = s.variants[m].meta;
+      var cur = m === state.mode ? ' is-current' : '';
+      var label = m === 'llm' ? 'LLM' : 'Embedding';
+      var text = meta && meta.hit ? T('compareHit', meta.first_hit_turn, meta.best_rank) : T('compareMiss');
+      return '<span class="compare-pill' + cur + '" data-mode="' + m + '"><span class="dot"></span>' + label + ' <b>' + text + '</b></span>';
+    }).join('');
+  }
+
+  function stopPlay(){
+    state.playing = false;
+    if (state.playTimer) { clearInterval(state.playTimer); state.playTimer = null; }
+    document.getElementById('btnPlay').classList.remove('is-playing');
+    document.getElementById('btnPlay').textContent = T('playBtn');
+  }
+
+  function renderPanel(){
+    var s = currentSample();
+    var turns = s.variants[state.mode].turns;
+    var total = turns.length;
+    if (state.turnIndex > total) state.turnIndex = total;
+    if (state.turnIndex < 1) state.turnIndex = 1;
+
+    document.getElementById('panelScenario').textContent = SCENARIO_LABEL[s.scenario_type];
+    document.getElementById('panelSampleId').textContent = s.sample_id;
+    document.getElementById('turnCount').innerHTML = T('turnCount', state.turnIndex, total);
+    document.getElementById('btnPrev').disabled = state.turnIndex <= 1;
+    document.getElementById('btnNext').disabled = state.turnIndex >= total;
+
+    renderCompareStrip();
+
+    // target card
+    var targetAsin = s.ground_truth;
+    var visibleTurns = turns.slice(0, state.turnIndex);
+    var hitNow = visibleTurns.some(function(t){ return t.hit; });
+    var revealed = state.revealed || hitNow;
+    var card = document.getElementById('targetCard');
+    card.classList.toggle('is-found', !!hitNow);
+    document.getElementById('targetTitle').textContent = productTitle(targetAsin);
+    document.getElementById('targetTitle').classList.toggle('is-hidden', !revealed);
+    document.getElementById('revealBtn').style.display = revealed ? 'none' : '';
+
+    // transcript
+    var html = visibleTurns.map(function(t){
+      var rankItems = '';
+      var recs = t.recommendations;
+      var top = recs.slice(0, 5);
+      rankItems += top.map(function(asin, i){
+        var isTarget = asin === targetAsin;
+        return '<div class="rank-item' + (isTarget?' is-target':'') + '">' +
+          '<span class="rank-badge">#' + (i+1) + '</span>' +
+          '<div class="rank-info"><div class="rank-title">' + escapeHtml(productTitle(asin)) + (isTarget?' 🎯':'') + '</div>' +
+          '<div class="rank-meta">' + escapeHtml(productMeta(asin)) + '</div></div>' +
+        '</div>';
+      }).join('');
+      if (t.target_rank && t.target_rank > 5) {
+        rankItems += '<div class="rank-gap">⋯</div>';
+        var asin = recs[t.target_rank-1];
+        rankItems += '<div class="rank-item is-target">' +
+          '<span class="rank-badge">#' + t.target_rank + '</span>' +
+          '<div class="rank-info"><div class="rank-title">' + escapeHtml(productTitle(asin)) + ' 🎯</div>' +
+          '<div class="rank-meta">' + escapeHtml(productMeta(asin)) + '</div></div>' +
+        '</div>';
+      }
+
+      var askChip = t.ask_attribute && ATTR_LABEL[t.ask_attribute] ?
+        '<div class="ask-chip">' + T('askPrefix') + ATTR_LABEL[t.ask_attribute] + '</div>' : '';
+      var hitBanner = t.hit ? '<div class="hit-banner">' + T('hitBanner', t.turn, t.target_rank) + '</div>' : '';
+
+      var constraints = t.constraints && t.constraints.length ? t.constraints.join(' · ') : T('noConstraints');
+      var detail = '<button class="detail-toggle" data-turn="' + t.turn + '">▸ ' + T('techDetail') + '</button>' +
+        '<div class="detail-body" data-turn-body="' + t.turn + '">' +
+          '<div class="detail-row"><span class="k">' + T('detailRoute') + '</span><span class="v">' + (ROUTE_LABEL[t.route]||t.route||'—') + '</span></div>' +
+          '<div class="detail-row"><span class="k">' + T('detailConstraints') + '</span><span class="v">' + escapeHtml(constraints) + '</span></div>' +
+        '</div>';
+
+      return '<div class="turn-block">' +
+        '<div class="turn-index">' + T('turnIndexLabel', t.turn) + '</div>' +
+        '<div class="bubble-row user"><div class="bubble user">' + escapeHtml(t.user_message) + '</div></div>' +
+        '<div class="bubble-row agent"><div class="bubble agent">' + escapeHtml(t.message) + askChip + '</div></div>' +
+        hitBanner +
+        '<div class="rank-list">' + rankItems + '</div>' +
+        detail +
+      '</div>';
+    }).join('');
+
+    document.getElementById('transcript').innerHTML = html;
+
+    document.querySelectorAll('.detail-toggle').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var body = document.querySelector('[data-turn-body="' + btn.getAttribute('data-turn') + '"]');
+        var open = body.classList.toggle('is-open');
+        btn.textContent = (open ? '▾' : '▸') + ' ' + T('techDetail');
+      });
+    });
+
+    if (state.turnIndex >= total) stopPlay();
+  }
+
+  function renderAll(){
+    syncLangDicts();
+    applyStaticI18N();
+    document.querySelectorAll('.mode-btn').forEach(function(b){
+      b.classList.toggle('is-active', b.getAttribute('data-mode') === state.mode);
+    });
+    document.getElementById('btnPlay').textContent = state.playing ? T('pauseBtn') : T('playBtn');
+    renderTiles();
+    renderCharts();
+    renderScenarioChips();
+    renderSampleList();
+    renderProfile();
+    renderPanel();
+  }
+
+  // ---------- events ----------
+  document.getElementById('modeSwitch').addEventListener('click', function(e){
+    var btn = e.target.closest('.mode-btn');
+    if (!btn) return;
+    state.mode = btn.getAttribute('data-mode');
+    state.turnIndex = 1;
+    state.revealed = false;
+    stopPlay();
+    renderAll();
+  });
+
+  document.getElementById('langSwitch').addEventListener('click', function(e){
+    var btn = e.target.closest('.lang-btn');
+    if (!btn) return;
+    state.lang = btn.getAttribute('data-lang');
+    try { localStorage.setItem('demoLang', state.lang); } catch(e){}
+    renderAll();
+  });
+
+  document.getElementById('scenarioChips').addEventListener('click', function(e){
+    var btn = e.target.closest('.chip');
+    if (!btn) return;
+    state.scenario = btn.getAttribute('data-scenario');
+    state.sampleId = DATA.scenarios[state.scenario][0].sample_id;
+    state.turnIndex = 1;
+    state.revealed = false;
+    stopPlay();
+    renderAll();
+  });
+
+  document.getElementById('sampleList').addEventListener('click', function(e){
+    var btn = e.target.closest('.sample-card');
+    if (!btn) return;
+    state.sampleId = btn.getAttribute('data-sample');
+    state.turnIndex = 1;
+    state.revealed = false;
+    stopPlay();
+    renderAll();
+  });
+
+  document.getElementById('compareStrip').addEventListener('click', function(e){
+    var btn = e.target.closest('.compare-pill');
+    if (!btn) return;
+    state.mode = btn.getAttribute('data-mode');
+    state.turnIndex = 1;
+    state.revealed = false;
+    stopPlay();
+    renderAll();
+  });
+
+  document.getElementById('revealBtn').addEventListener('click', function(){
+    state.revealed = true;
+    renderPanel();
+  });
+
+  document.getElementById('btnNext').addEventListener('click', function(){
+    var s = currentSample();
+    var total = s.variants[state.mode].turns.length;
+    if (state.turnIndex < total) { state.turnIndex++; renderPanel(); }
+  });
+  document.getElementById('btnPrev').addEventListener('click', function(){
+    if (state.turnIndex > 1) { state.turnIndex--; renderPanel(); }
+  });
+  document.getElementById('btnReset').addEventListener('click', function(){
+    state.turnIndex = 1; state.revealed = false; stopPlay(); renderPanel();
+  });
+  document.getElementById('btnPlay').addEventListener('click', function(){
+    if (state.playing) { stopPlay(); return; }
+    state.playing = true;
+    document.getElementById('btnPlay').classList.add('is-playing');
+    document.getElementById('btnPlay').textContent = T('pauseBtn');
+    state.playTimer = setInterval(function(){
+      var s = currentSample();
+      var total = s.variants[state.mode].turns.length;
+      if (state.turnIndex >= total) { stopPlay(); return; }
+      state.turnIndex++;
+      renderPanel();
+    }, 1900);
+  });
+
+  renderAll();
+})();
+</script>
