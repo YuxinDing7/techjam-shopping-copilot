@@ -154,8 +154,10 @@ scoring) are in the numbered walkthrough below.*
      when the LLM is fully disabled — every remaining non-stopword token in the message added to
      `search_phrases` so retrieval still has a keyword query to run.
 2. **Routing.** Sessions are classified `buying` (≥2 active constraints, or buying-intent language) vs.
-   `browsing`, which changes both retrieval weighting and how much the anonymized `user_profile`
-   preference tags influence the query.
+   `browsing`, which changes both retrieval weighting (the strict per-attribute expression described
+   below is only added in `buying` mode) and whether the anonymized `user_profile`'s `preference_tags`
+   are folded into the query at all — they are only added in `browsing` mode, where explicit constraints
+   are sparser and there is less to search on.
 3. **Retrieval.** An in-memory SQLite FTS5 index (title/categories/features/details/store/description,
    field-weighted BM25) is queried with both a broad (`OR`) and, in `buying` mode, a strict (`AND`)
    per-attribute expression, fused via rank-based RRF. Products matching a user's explicitly negated
@@ -167,11 +169,17 @@ scoring) are in the numbered walkthrough below.*
    candidates 0–4 against the active constraints via a strict JSON schema; `embedding` instead embeds
    the current intent and the top ~30 candidates with `nomic-embed-text` and blends cosine similarity
    into the rule score. Both fall back to the pure rule-based order on any transport or format error.
-6. **Clarification strategy.** `_next_attribute()` picks the next `ask_attribute` by estimating
-   information gain — grouping current candidates by coarse attribute value and preferring the split
-   that most reduces expected remaining candidates — with a deterministic fallback order when no split
-   is informative. `brand` and `category` are never asked, since the evaluator's simulator can never
-   match a disclosed constraint to those two.
+6. **Clarification strategy.** `_next_attribute()` first checks two catch-all shortcuts before scoring
+   anything: right after an Intent Override, and whenever the route is `buying` and the user has already
+   declared at least one `no_preference`, it immediately asks the simulator's catch-all `other` attribute
+   (once, until the next override resets `asked`) rather than running the information-gain search below
+   — both situations mean the most useful next question is "what else matters to you now", not a
+   re-ranked guess from stale candidate data. Otherwise it picks the next `ask_attribute` by estimating
+   information gain — grouping current candidates by coarse attribute value (skipping an attribute if
+   fewer than half the candidates have a known value for it) and preferring the split that most reduces
+   expected remaining candidates — with a deterministic fallback priority order when no split is
+   informative. `brand` and `category` are never asked, since the evaluator's simulator can never match
+   a disclosed constraint to those two.
 
 An **Intent Override** turn (detected by regex/LLM-classified `intent="override"`) resets accumulated
 constraints, asked attributes, and excluded-ASIN history while preserving the conversation transcript
