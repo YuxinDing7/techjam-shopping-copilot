@@ -118,14 +118,41 @@ flowchart TD
 Ollama call · gray = non-LLM fallback path. Implementation specifics (BM25 field weights, RRF fusion, `RERANK_METHOD`, information-gain
 scoring) are in the numbered walkthrough below.*
 
-1. **Constraint & intent extraction.** The current user message is sent to a local Ollama chat model
-   (`qwen3:4b` by default) with a JSON-schema-constrained prompt asking it to extract shopping
-   constraints (`attribute`, `value`, `negated`), free-text `search_phrases`, an `intent` label
-   (`provide_constraint` / `no_preference` / `override` / `other`), and a grounded `category_phrase`.
-   Every extracted value is validated against the raw message and a fixed attribute vocabulary before
-   being accepted — the model cannot invent constraints, only select from what the user actually said.
-   A regex-based fallback (materials/colors/budget patterns, "no preference for X", override phrasing)
-   covers the same signals when the LLM is disabled, times out, or returns invalid JSON.
+1. **Constraint & intent extraction.** Each turn resolves through the following steps, in order:
+   - **Fast path, no LLM call.** If the message is an exact match for the simulator's own "no
+     preference for X" / "don't have a preference for X" phrasing (`_no_preference_attribute`), that
+     attribute is marked `no_preference` immediately and the LLM is skipped entirely for this turn.
+   - **LLM parse.** Otherwise the message is sent to a local Ollama chat model (`qwen3:4b` by default,
+     `_llm_parse`) with a JSON-schema-constrained prompt asking for `constraints` (an array of
+     `{attribute, value, negated}`), free-text `search_phrases`, an `intent` label
+     (`provide_constraint` / `no_preference` / `override` / `other`), `no_preference_attribute`, and a
+     `category_phrase`. An unparseable first reply gets exactly one repair retry (same context plus an
+     "invalid JSON, retry once" instruction) before the parse is treated as failed.
+   - **Closed-vocabulary validation.** `intent` and `no_preference_attribute` are accepted only if they
+     fall inside their fixed value sets (`_llm_intent`); anything else is discarded. `category_phrase`
+     is accepted as a new category constraint only if every one of its terms is copied from the raw
+     message *and* stem-matches a term the catalog actually uses as a category head (`_llm_category_terms`)
+     — a phrase that fails either check never reaches retrieval.
+   - **Per-attribute grounding of `constraints`.** Each entry is checked individually
+     (`_apply_llm_extraction`): the `attribute` must be one of the ten allowed values; a `category`
+     value's terms must fall inside the currently valid category scope (the original product type, or
+     the replacement one from an override — see below); a `material` value must contain one of the
+     fixed material keywords; a `use_case` value must contain one of the fixed use-case markers. Every
+     `search_phrases` entry must additionally be ≤8 tokens, ≤120 characters, and have every one of its
+     tokens appear in the raw user message. A constraint or phrase that fails its check is dropped and
+     logged with a reason string (`rejected_constraints` / `rejected_search_phrases`, visible via
+     `debug_snapshot`) rather than silently discarded — nothing is trusted just because the model
+     produced it, only what can be traced back to the user's own words and the fixed vocabularies is
+     kept.
+   - **Override ordering.** When `intent == "override"`, accumulated constraints, asked attributes, and
+     excluded-ASIN history are reset *before* the constraint checks above run, so a category-scope check
+     for this turn is evaluated against the new (replacement) category rather than the stale one.
+   - **Regex fallback.** If the LLM is disabled, the parse fails outright (timeout, transport error, or
+     still-invalid JSON after the retry), or a successful parse ends up with nothing accepted at all,
+     a deterministic fallback takes over for that turn: fixed material/color keyword matching, a budget
+     regex, the same "no preference for X" / override phrasings matched by simple regexes, and — only
+     when the LLM is fully disabled — every remaining non-stopword token in the message added to
+     `search_phrases` so retrieval still has a keyword query to run.
 2. **Routing.** Sessions are classified `buying` (≥2 active constraints, or buying-intent language) vs.
    `browsing`, which changes both retrieval weighting and how much the anonymized `user_profile`
    preference tags influence the query.
